@@ -55,6 +55,7 @@ function buildSet(total,weighted){const used=new Set(),alloc={};let sum=0;for(co
  const qs=[];for(const k in alloc)qs.push(...pick(BANK.filter(q=>q.spec==k),alloc[k],used,weighted));if(qs.length<total)qs.push(...pick(BANK,total-qs.length,used,weighted));return shuffle(qs)}
 // ---------------- figures / question renderer ----------------
 function renderQ(q,r,show){let h=`<div class="stem">${esc(q.stem)}</div>`;const L="ABCDEFG";
+ {const fg=window.QFIG?QFIG.figFor(q):"";if(fg)h+=`<div class="qfig">${fg}<div class="qfig-cap">Figure (not to scale). Use the values given in the question.</div></div>`;}
  if(q.image)h+=`<div><img src="${esc(q.image)}" style="max-width:100%;border:1px solid #ccc;margin-bottom:10px"></div>`;
  if(q.type==="mc"||q.type==="ms"){if(q.type==="ms")h+=`<div class="tag"><b>Select all that apply.</b></div>`;
   q.options.forEach((o,i)=>{const sel=q.type==="ms"?r.v.includes(i):r.v===i,corr=q.type==="ms"?q.answer.includes(i):q.answer===i;
@@ -116,31 +117,54 @@ const toggleCalc=()=>{$("#calc").classList.toggle("hidden");const b=$("#tbCalc")
 document.addEventListener("click",e=>{if(e.target.dataset&&e.target.dataset.close){$("#"+e.target.dataset.close).classList.add("hidden");const b=$("#tbCalc");b&&b.classList.remove("on")}});
 // ---------------- site shell ----------------
 let route="home";
-function shell(body){return `<div class="top"><div class="brand">PE Mechanical · Machine Design &amp; Materials · CBT Simulator</div><nav>
- ${[["home","Dashboard"],["guides","Study guides"],["study","Study by section"],["exam","Exam mode"],["errors","Error log"],["tm","Testmasters book"],["about","About"]].map(([k,l])=>`<a data-r="${k}" class="${route===k?"on":""}">${l}</a>`).join("")}</nav></div><div class="wrap">${body}</div>`}
+// ---------------- friendly UI helpers (site side only; the CBT exam look is untouched) ----------------
+const IC={home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',book:'<path d="M4 4h6a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4z"/><path d="M20 4h-6a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h7z"/>',
+ target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>',
+ list:'<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+ moon:'<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+ star:'<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',bulb:'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+ key:'<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/>',flag:'<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',pencil:'<path d="M4 20l4-1L19 8l-3-3L5 16z"/>',
+ chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'};
+const ico=(n,c="")=>`<svg class="ic ${c}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]||""}</svg>`;
+function ring(p,big,small,col){p=Math.max(0,Math.min(1,p||0));const r=34,C=2*Math.PI*r;return `<div class="ring"><svg viewBox="0 0 84 84"><circle cx="42" cy="42" r="${r}" class="ring-bg"/><circle cx="42" cy="42" r="${r}" class="ring-fg" style="stroke:${col||"var(--accent)"};stroke-dasharray:${(C*p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 42 42)"/></svg><div class="ring-t"><b>${big}</b><span>${small||""}</span></div></div>`}
+function cheer(read,tot,seen,acc){if(!read&&!seen)return "Welcome! Start with any study guide. Each one takes about 20 minutes.";
+ if(read>=tot)return `Amazing, all ${tot} guides read! Keep your edge sharp with timed exams.`;
+ const a=acc!=null&&acc>=0.7?" Your accuracy looks strong.":"";return `Nice work, ${read} of ${tot} guides read.${a} Keep going, one subsection at a time.`}
+function themeBtn(){const d=document.documentElement.dataset.theme==="dark";return `<button class="themebtn" id="themeT" title="Toggle dark mode" aria-label="Toggle dark mode">${ico(d?"sun":"moon")}</button>`}
+function bindTheme(){const b=$("#themeT");if(b)b.onclick=()=>{const d=document.documentElement.dataset.theme==="dark"?"light":"dark";document.documentElement.dataset.theme=d;try{localStorage.setItem("peexam_theme",d)}catch(e){}b.innerHTML=ico(d==="dark"?"sun":"moon")}}
+try{const t=localStorage.getItem("peexam_theme");if(t)document.documentElement.dataset.theme=t}catch(e){}
+function figSVG(d,ctx){if(!d||!window.DG||!DG[d.fn])return "";let s="";try{s=DG[d.fn](d.args||{})}catch(e){return ""}return ctx&&window.QFIG&&!/columnChart|gdtTable|ortho|galvanic|strainGage/.test(d.fn)?QFIG.scrub(s,ctx):s}
+function shell(body){const nav=[["home","Dashboard","home"],["guides","Study guides","book"],["study","Study by section","target"],["exam","Exam mode","clock"],["errors","Error log","list"],["tm","Testmasters book","flag"],["about","About","info"]];
+ return `<div class="top"><div class="brand"><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--accent)"/><path d="M9 21l4-10 3 7 2-4 5 7" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>PE Mechanical <small>Machine Design &amp; Materials</small></span></div>${themeBtn()}<nav>
+ ${nav.map(([k,l,i])=>`<a data-r="${k}" class="${route===k?"on":""}">${ico(i)}<span>${l}</span></a>`).join("")}</nav></div><div class="wrap">${body}</div>`}
 function go(r){route=r;stopTimer();$("#calc").classList.add("hidden");({home:home,guides:guidesPage,exam:examSetup,study:studySetup,errors:errorsPage,tm:tmPage,about:about})[r]();window.scrollTo(0,0)}
-function bindNav(){app.querySelectorAll("[data-r]").forEach(a=>a.onclick=()=>go(a.dataset.r))}
+function bindNav(){app.querySelectorAll("[data-r]").forEach(a=>a.onclick=()=>go(a.dataset.r));bindTheme()}
 function barCls(p){return p<0.55?"lo":p<0.7?"mid":""}
 // ---------------- dashboard ----------------
 function home(){const R=readiness(),A=areaStats(q=>q.src==="orig"),due=srsDue().length,seen=Object.keys(S.qs).filter(id=>byId[id]).length;
- const tot=Object.values(S.qs).reduce((a,s)=>[a[0]+s.n,a[1]+s.c],[0,0]);
+ const tot=Object.values(S.qs).reduce((a,s)=>[a[0]+s.n,a[1]+s.c],[0,0]);const read=GUIDES.filter(g=>S.guides[g.code]&&S.guides[g.code].read).length,acc=tot[0]?tot[1]/tot[0]:null;
  const rows=Object.keys(SPEC).map(k=>{const a=A[k]||{tot:0,seen:0,n:0,c:0},acc=a.n?a.c/a.n:0,ex=R&&R.per[k];
   return `<tr><td><b>${k}. ${SPEC[k]}</b><div class="muted">Exam: ${SPECRANGE[k]} questions</div></td><td style="width:22%">${a.seen}/${a.tot} seen<div class="bar"><i style="width:${pct(a.seen/a.tot)}"></i></div></td>
-  <td style="width:22%">${a.n?pct(acc)+" ("+a.c+"/"+a.n+")":"—"}<div class="bar ${barCls(acc)}"><i style="width:${a.n?pct(acc):0}"></i></div></td><td>${ex&&ex.n?pct(ex.c/ex.n):"—"}</td>
+  <td style="width:22%">${a.n?pct(acc)+" ("+a.c+"/"+a.n+")":"—"}<div class="bar ${barCls(acc)}"><i style="width:${a.n?pct(acc):0}"></i></div></td><td class="hide-sm">${ex&&ex.n?pct(ex.c/ex.n):"—"}</td>
   <td><button class="btn sec" data-studyka="${k}">Study</button></td></tr>`}).join("");
  const last=S.hist.slice(-6).reverse().map(h=>`<tr><td>${new Date(h.t).toLocaleString()}</td><td>${esc(h.mode)}</td><td>${h.items.filter(x=>x.ok).length}/${h.items.length} (${pct(h.items.filter(x=>x.ok).length/h.items.length)})</td></tr>`).join("");
- const tmTile=TM.length?`<div class="card"><h2>📘 Testmasters book</h2><div class="big">${TM.length}</div><div class="muted">problems loaded from your scans</div><button class="btn" data-r="tm">Open</button></div>`
-  :`<div class="card tile-tm"><h2>📘 Testmasters book (coming)</h2><p class="muted">Placeholder for the scanned book you send next week. Drop the entries into <code>data/testmasters.js</code> and this tile turns into a study list by chapter.</p><button class="btn sec" data-r="tm">How to add it</button></div>`;
- app.innerHTML=shell(`<div class="grid">
-  <div class="card"><h2>Readiness</h2>${R?`<div class="big">${pct(R.P)}</div><div class="muted">Estimated chance of passing, from your last ${R.exams} timed exam(s). Expected score ${pct(R.E)} ± ${pct(R.sd)} against an <b>assumed</b> ${pct(CUT)} cut score (NCEES does not publish one).</div><div class="bar ${barCls(R.E)}" style="margin-top:8px"><i style="width:${pct(R.E)}"></i></div>`:`<div class="big">—</div><div class="muted">Take a timed exam (Exam mode) to get an estimate.</div>`}</div>
-  <div class="card"><h2>Spaced review</h2><div class="big">${due}</div><div class="muted">missed questions due today (Leitner intervals 0/1/3/7/14/30 days)</div><button class="btn" id="srsGo" ${due?"":"disabled"}>Review now</button></div>
-  <div class="card"><h2>Error log</h2><div class="big">${new Set(S.err.map(e=>e.id)).size}</div><div class="muted">different questions missed</div><button class="btn sec" data-r="errors">Open error log</button></div>
-  <div class="card"><h2>Overall</h2><div class="big">${tot[0]?pct(tot[1]/tot[0]):"—"}</div><div class="muted">${seen} of ${ALL.length} questions seen · ${tot[0]} attempts</div><button class="btn" data-r="exam">Start exam</button><button class="btn sec" data-r="study">Study</button></div>
-  <div class="card"><h2>📗 Study guides</h2><div class="big">${GUIDES.filter(g=>S.guides[g.code]&&S.guides[g.code].read).length}/${GUIDES.length}</div><div class="muted">guides read. Learn the subsection first, then take its quiz.</div><button class="btn" data-r="guides">Open guides</button></div>
+ const next=GUIDES.find(g=>g.weak&&!(S.guides[g.code]&&S.guides[g.code].read))||GUIDES.find(g=>!(S.guides[g.code]&&S.guides[g.code].read));
+ const tmTile=TM.length?`<div class="card"><h2>${ico("flag")} Testmasters book</h2><div class="big">${TM.length}</div><div class="muted">problems loaded from your scans</div><button class="btn" data-r="tm">Open</button></div>`
+  :`<div class="card tile-tm"><h2>${ico("flag")} Testmasters book (coming)</h2><p class="muted">A placeholder for your own book problems. Add entries to <code>data/testmasters.js</code> on your own copy and this tile becomes a study list by chapter.</p><button class="btn sec" data-r="tm">How to add it</button></div>`;
+ app.innerHTML=shell(`<div class="hero"><div class="hero-txt"><h1>${new Date().getHours()<12?"Good morning":new Date().getHours()<18?"Good afternoon":"Good evening"} 👋</h1><p>${cheer(read,GUIDES.length,seen,acc)}</p>
+  ${next?`<button class="btn" data-guide="${next.code}">${ico("book")} Continue: ${next.code} ${esc(next.title)}</button>`:""}<button class="btn sec" data-r="exam">${ico("clock")} Timed exam</button></div>
+  <div class="rings">${ring(read/GUIDES.length,`${read}/${GUIDES.length}`,"guides read")}${ring(seen/ALL.length,`${seen}`,`of ${ALL.length} Qs seen`,"var(--accent2)")}${ring(acc||0,acc!=null?pct(acc):"—","accuracy","var(--good)")}</div></div>
+  <div class="grid">
+  <div class="card"><h2>${ico("chart")} Readiness</h2>${R?`<div class="big">${pct(R.P)}</div><div class="muted">Estimated chance of passing, from your last ${R.exams} timed exam(s). Expected score ${pct(R.E)} ± ${pct(R.sd)} against an <b>assumed</b> ${pct(CUT)} cut score (NCEES does not publish one).</div><div class="bar ${barCls(R.E)}" style="margin-top:8px"><i style="width:${pct(R.E)}"></i></div>`:`<div class="big">—</div><div class="muted">Take a timed exam (Exam mode) to get an estimate.</div>`}</div>
+  <div class="card"><h2>${ico("clock")} Spaced review</h2><div class="big">${due}</div><div class="muted">${due?"missed questions are ready for a quick second look":"Nothing due. You're all caught up! 🎉"}</div><button class="btn" id="srsGo" ${due?"":"disabled"}>Review now</button></div>
+  <div class="card"><h2>${ico("list")} Error log</h2><div class="big">${new Set(S.err.map(e=>e.id)).size}</div><div class="muted">different questions missed. Each one is a lesson learned.</div><button class="btn sec" data-r="errors">Open error log</button></div>
+  <div class="card"><h2>${ico("target")} Overall</h2><div class="big">${tot[0]?pct(tot[1]/tot[0]):"—"}</div><div class="muted">${seen} of ${ALL.length} questions seen · ${tot[0]} attempts</div><button class="btn" data-r="exam">Start exam</button><button class="btn sec" data-r="study">Study</button></div>
+  <div class="card"><h2>${ico("book")} Study guides</h2><div class="big">${read}/${GUIDES.length}</div><div class="muted">guides read. Learn the subsection first, then take its quiz.</div><button class="btn" data-r="guides">Open guides</button></div>
   ${tmTile}</div>
-  <div class="card" style="margin-top:16px"><h2>Progress by 2025 MDM knowledge area</h2><table class="t"><tr><th>Knowledge area</th><th>Coverage</th><th>Accuracy (all modes)</th><th>Recent exams</th><th></th></tr>${rows}</table></div>
-  <div class="card" style="margin-top:16px"><h2>Recent exams</h2>${last?`<table class="t"><tr><th>Date</th><th>Mode</th><th>Score</th></tr>${last}</table>`:`<p class="muted">No exams yet.</p>`}</div>`);
- bindNav();const sg=$("#srsGo");if(sg)sg.onclick=()=>startStudy(srsDue(),"Spaced review");
+  <div class="card" style="margin-top:16px"><h2>${ico("chart")} Progress by 2025 MDM knowledge area</h2><div class="tscroll"><table class="t"><tr><th>Knowledge area</th><th>Coverage</th><th>Accuracy (all modes)</th><th class="hide-sm">Recent exams</th><th></th></tr>${rows}</table></div></div>
+  <div class="card" style="margin-top:16px"><h2>${ico("clock")} Recent exams</h2>${last?`<div class="tscroll"><table class="t"><tr><th>Date</th><th>Mode</th><th>Score</th></tr>${last}</table></div>`:`<p class="muted">No exams yet. When you're ready, a short 20-question practice is a great first step.</p>`}</div>`);
+ bindNav();bindTheme();const sg=$("#srsGo");if(sg)sg.onclick=()=>startStudy(srsDue(),"Spaced review");
+ app.querySelectorAll("[data-guide]").forEach(b=>b.onclick=()=>openGuide(b.dataset.guide));
  app.querySelectorAll("[data-studyka]").forEach(b=>b.onclick=()=>{route="study";studySetup(+b.dataset.studyka)})}
 // ---------------- exam setup ----------------
 function examSetup(){app.innerHTML=shell(`<div class="grid">
@@ -251,23 +275,33 @@ function studyDone(){S.study.push({t:Date.now(),label:ST.label,n:ST.done,c:ST.ok
 // ---------------- study guides ----------------
 function guidesPage(){const st=subStats(),read=GUIDES.filter(g=>S.guides[g.code]&&S.guides[g.code].read).length;
  const by={};GUIDES.forEach(g=>(by[g.area]=by[g.area]||[]).push(g));
- app.innerHTML=shell(`<div class="card"><h2>Study guides: learn, then quiz</h2><p class="muted">One guide for each 2025 MDM subsection, 1.A–6.F. Read the guide (key ideas → formulas → handbook keywords → worked examples → traps → cheat sheet), then press <b>Take section quiz</b>. Guides marked ★ cover your focus areas: statics/dynamics, mechanics of materials, materials, vibration and basic engineering practice.</p>
- <div class="bar" style="max-width:420px"><i style="width:${pct(read/GUIDES.length)}"></i></div><div class="muted">${read} of ${GUIDES.length} read · <a href="guides_pdf/MDM_Study_Guides_All.pdf" target="_blank">Combined PDF</a></div></div>
- ${Object.keys(by).map(k=>`<div class="card" style="margin-top:14px"><h2>${k}. ${SPEC[k]} <span class="muted">(exam ${SPECRANGE[k]} questions)</span> <a class="muted" style="font-weight:normal" href="guides_pdf/MDM_Study_Guide_Area_${k}.pdf" target="_blank">PDF</a></h2><table class="t">
- ${by[k].map(g=>{const r=S.guides[g.code]||{},a=st[g.code]||{tot:0,n:0,c:0};return `<tr><td style="width:46%">${g.weak?"★ ":""}<b>${g.code}</b> ${esc(g.title)}</td><td>${r.read?`<span class="pill" style="background:#d8f0de">✔ Read ${new Date(r.t).toLocaleDateString()}</span>`:r.opened?'<span class="pill">Opened</span>':'<span class="pill" style="background:#fbe6e3">Not read</span>'}</td><td class="muted">${a.tot} Qs · acc ${a.n?pct(a.c/a.n):"—"}</td>
- <td><button class="btn" data-guide="${g.code}">Study guide</button><button class="btn sec" data-quiz="${g.code}" ${a.tot?"":"disabled"}>Quiz</button></td></tr>`}).join("")}</table></div>`).join("")}`);
- bindNav();app.querySelectorAll("[data-guide]").forEach(b=>b.onclick=()=>openGuide(b.dataset.guide));app.querySelectorAll("[data-quiz]").forEach(b=>b.onclick=()=>sectionQuiz(b.dataset.quiz))}
-function guideHTML(g){return `<div class="guide"><div class="tag">${g.area}. ${esc(SPEC[g.area])} ${g.weak?'· <b>★ focus area</b>':""}</div><h1 style="margin:4px 0 12px;color:#13294b">${g.code} ${esc(g.title)}</h1>
- <h3>1. Key concepts</h3><ul>${g.concepts.map(c=>`<li>${esc(c)}</li>`).join("")}</ul>
- <h3>2. Essential formulas</h3><table class="t"><tr><th>Name</th><th>Formula</th><th>Variables / units</th></tr>${g.formulas.map(([a,b,c])=>`<tr><td>${esc(a)}</td><td style="font-family:Cambria,Georgia,serif;font-size:15px">${esc(b)}</td><td class="muted">${esc(c)}</td></tr>`).join("")}</table>
- <h3>3. Handbook search keywords</h3><div>${g.keywords.map(k=>`<span class="pill">${esc(k)}</span>`).join(" ")}</div><div class="muted" style="margin-top:4px">Type these in the search box of the NCEES MDM Reference Handbook PDF (the exam has no Ctrl+F).</div>
- <h3>4. Worked examples</h3>${g.examples.map((e,i)=>`<div class="sol" style="margin-top:10px"><b>Example ${i+1}: ${esc(e.title)}</b><p>${esc(e.problem)}</p><ol>${e.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol><div><b>Answer:</b> ${esc(e.answer)}</div></div>`).join("")}
- <h3>5. Common traps</h3><ul>${g.traps.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
- <h3>6. Cheat summary</h3><div class="cheat">${g.cheat.map(c=>`<div>▸ ${esc(c)}</div>`).join("")}</div></div>`}
+ app.innerHTML=shell(`<div class="hero"><div class="hero-txt"><h1>${ico("book")} Study guides</h1><p>${cheer(read,GUIDES.length,1,null)}</p><p class="muted">One friendly guide for each 2025 MDM subsection (1.A–6.F): key ideas, diagrams, formulas, handbook keywords, worked examples with step-by-step solutions, "try it yourself" problems, traps and a cheat sheet. Then take the section quiz. ★ marks focus areas.</p>
+ <a class="btn sec" href="guides_pdf/MDM_Study_Guides_All.pdf" target="_blank">Combined PDF</a></div><div class="rings">${ring(read/GUIDES.length,`${read}/${GUIDES.length}`,"guides read")}</div></div>
+ ${Object.keys(by).map(k=>{const rk=by[k].filter(g=>S.guides[g.code]&&S.guides[g.code].read).length;return `<div class="area-h"><h2>${k}. ${SPEC[k]}</h2><span class="muted">exam ${SPECRANGE[k]} questions · ${rk}/${by[k].length} read · <a href="guides_pdf/MDM_Study_Guide_Area_${k}.pdf" target="_blank">PDF</a></span></div><div class="gcards">
+ ${by[k].map(g=>{const r=S.guides[g.code]||{},a=st[g.code]||{tot:0,n:0,c:0};return `<div class="gcard ${r.read?"done":""}"><div class="gcode">${g.code}${g.weak?` <span class="star" title="focus area">${ico("star")}</span>`:""}</div><div class="gtitle">${esc(g.title)}</div>
+ <div class="gmeta">${r.read?`<span class="pill ok">${ico("check")} Read</span>`:r.opened?'<span class="pill">Started</span>':'<span class="pill">New</span>'}<span class="muted">${g.examples.length} examples · ${a.tot} Qs${a.n?" · "+pct(a.c/a.n):""}</span></div>
+ <div><button class="btn" data-guide="${g.code}">Study guide</button><button class="btn sec" data-quiz="${g.code}" ${a.tot?"":"disabled"}>Quiz</button></div></div>`}).join("")}</div>`}).join("")}`);
+ bindNav();bindTheme();app.querySelectorAll("[data-guide]").forEach(b=>b.onclick=()=>openGuide(b.dataset.guide));app.querySelectorAll("[data-quiz]").forEach(b=>b.onclick=()=>sectionQuiz(b.dataset.quiz))}
+function exHTML(e,i){const ctx=e.problem+" "+e.steps.join(" ")+" "+e.answer,fig=figSVG(e.fig,ctx);
+ const head=`<div class="ex-h"><span class="ex-n">${e.try?ico("pencil")+" Try it yourself":"Example "+(i+1)}</span><b>${esc(e.title)}</b></div>`;
+ const body=`<div class="ex-body"><div class="ex-p">${esc(e.problem)}${e.kw?`<div class="kw">${ico("key")} <span>Handbook search: <b>${esc(e.kw)}</b></span></div>`:""}</div>${fig?`<div class="ex-fig">${fig}</div>`:""}</div>`;
+ const sol=`<ol class="steps">${e.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol><div class="ans">${ico("check")} <b>Answer:</b> ${esc(e.answer)}</div>${e.check?`<div class="tip">${ico("bulb")} <span><b>Check your answer:</b> ${esc(e.check)}</span></div>`:""}`;
+ if(e.try)return `<div class="ex try">${head}${body}<div class="try-row"><button class="btn reveal" data-rev="${i}">${ico("eye")} Reveal answer and solution</button><span class="muted">Work it out on paper first. You've got this.</span></div><div class="revealed hidden" id="rev${i}">${sol}</div></div>`;
+ return `<div class="ex">${head}${body}<details class="solx"><summary>${ico("eye")} Show solution</summary>${sol}</details></div>`}
+function guideHTML(g){return `<div class="guide"><div class="tag">${g.area}. ${esc(SPEC[g.area])} ${g.weak?`· <b class="focus">${ico("star")} focus area</b>`:""}</div><h1>${g.code} ${esc(g.title)}</h1>
+ <div class="gnav">${["Key ideas","Diagrams","Formulas","Keywords","Examples","Traps","Cheat sheet"].map((t,i)=>`<a href="#gs${i}" onclick="document.getElementById('gs${i}').scrollIntoView({behavior:'smooth'});return false">${t}</a>`).join("")}</div>
+ <h3 id="gs0">${ico("bulb")} Key ideas</h3><ul class="concepts">${g.concepts.map(c=>`<li>${esc(c)}</li>`).join("")}</ul>
+ <h3 id="gs1">${ico("eye")} Picture it</h3><div class="dgrid">${(g.diagrams||[]).map(d=>`<figure>${figSVG(d)}<figcaption>${esc(d.cap||"")}</figcaption></figure>`).join("")}</div>
+ <h3 id="gs2">${ico("pencil")} Essential formulas</h3><div class="tscroll"><table class="t"><tr><th>Name</th><th>Formula</th><th>Variables / units</th></tr>${g.formulas.map(([a,b,c])=>`<tr><td>${esc(a)}</td><td class="fx">${esc(b)}</td><td class="muted">${esc(c)}</td></tr>`).join("")}</table></div>
+ <h3 id="gs3">${ico("key")} Handbook search keywords</h3><div>${g.keywords.map(k=>`<span class="pill">${esc(k)}</span>`).join(" ")}</div><div class="muted" style="margin-top:4px">Type these into the search box of the NCEES MDM Reference Handbook PDF. The exam has no Ctrl+F.</div>
+ <h3 id="gs4">${ico("target")} Worked examples <span class="muted">(${g.examples.length})</span></h3>${g.examples.map(exHTML).join("")}
+ <h3 id="gs5">${ico("flag")} Common traps</h3><ul class="traps">${g.traps.map(t=>`<li>${esc(t)}</li>`).join("")}</ul>
+ <h3 id="gs6">${ico("check")} Cheat summary</h3><div class="cheat">${g.cheat.map(c=>`<div>▸ ${esc(c)}</div>`).join("")}</div></div>`}
 function openGuide(code){const g=gById[code];if(!g)return;route="guides";const r=S.guides[code]=S.guides[code]||{};r.opened=Date.now();save();const n=ALL.filter(q=>q.sub===code).length;
- app.innerHTML=shell(`<div class="card">${guideHTML(g)}<div style="margin-top:18px;padding-top:12px;border-top:2px solid #e3e9f1">
- <button class="btn sec" id="gread">${r.read?"✔ Marked as read":"Mark as read"}</button><button class="btn" id="gquiz" ${n?"":"disabled"}>Take section quiz → (${Math.min(n,10)} of ${n} questions)</button><button class="btn sec" id="gback">All guides</button><a class="btn sec" style="text-decoration:none" href="guides_pdf/MDM_Study_Guide_Area_${g.area}.pdf" target="_blank">PDF</a></div></div>`);
- bindNav();$("#gread").onclick=()=>{r.read=true;r.t=Date.now();save();$("#gread").textContent="✔ Marked as read"};
+ app.innerHTML=shell(`<div class="card gcardwrap">${guideHTML(g)}<div class="gfoot">
+ <button class="btn sec" id="gread">${r.read?ico("check")+" Marked as read":"Mark as read"}</button><button class="btn" id="gquiz" ${n?"":"disabled"}>Take section quiz → (${Math.min(n,10)} of ${n} questions)</button><button class="btn sec" id="gback">All guides</button><a class="btn sec" style="text-decoration:none" href="guides_pdf/MDM_Study_Guide_Area_${g.area}.pdf" target="_blank">PDF</a></div></div>`);
+ bindNav();bindTheme();$("#gread").onclick=()=>{r.read=true;r.t=Date.now();save();const k=GUIDES.filter(x=>S.guides[x.code]&&S.guides[x.code].read).length;$("#gread").innerHTML=ico("check")+` Marked as read · nice work, ${k} of ${GUIDES.length} done!`};
+ app.querySelectorAll("[data-rev]").forEach(b=>b.onclick=()=>{$("#rev"+b.dataset.rev).classList.remove("hidden");b.remove()});
  $("#gquiz").onclick=()=>{if(!r.read){r.read=true;r.t=Date.now();save()}sectionQuiz(code)};$("#gback").onclick=()=>go("guides");window.scrollTo(0,0)}
 function sectionQuiz(code){const pool=ALL.filter(q=>q.sub===code);const unseen=shuffle(pool.filter(q=>!S.qs[q.id])),seen=shuffle(pool.filter(q=>S.qs[q.id])).sort((a,b)=>accOf(a)-accOf(b));
  startStudy(unseen.concat(seen).slice(0,10),"Section quiz "+code+" "+(gById[code]?gById[code].title:""))}
